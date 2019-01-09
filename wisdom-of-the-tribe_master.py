@@ -7,6 +7,8 @@ from IPython.display import display
 import requests
 from bs4 import BeautifulSoup
 import time
+from tqdm import tqdm
+import csv
 
 ####copy code for imdb
 film_list = list()
@@ -14,10 +16,11 @@ films_per_page_range = range(0,250)
 temp_films_list1 = [None] * len(films_per_page_range)
 temp_films_list2 = [None] * len(films_per_page_range)
 year_range = range(1980,2018)
-for year in year_range:
+for year in tqdm(year_range):
     y1 = year
     imdb_page_1 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&page=1&ref_=adv_nxt"
-    imdb_page_2 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&page=2&ref_=adv_nxt"
+    imdb_page_2 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&start=251&ref_=adv_nxt"
+    #imdb_page_2 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&page=2&ref_=adv_nxt"
     page1 = requests.get(imdb_page_1)
     page2 = requests.get(imdb_page_2)
     soup1 = BeautifulSoup(page1.content, 'html.parser')        
@@ -41,11 +44,11 @@ for x in range(0,len(film_list)):
     film_list[x] = film_list[x].replace("amp;","")
 
 ###Export film list as csv
-import csv
-with open('C:/Users/Justin/Dropbox/Python and SQL/film_list.csv', 'w', newline='') as myfile:
-    wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
-    for x in range(0,len(film_list)):
-        wr.writerow([film_list[x]])
+
+#with open('C:/Users/Justin/Dropbox/Python and SQL/film_list.csv', 'w', newline='') as myfile:
+#    wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+#    for x in range(0,len(film_list)):
+#        wr.writerow([film_list[x]])
        
 film_list = []
 with open('C:/Users/Justin/Dropbox/Python and SQL/film_list.csv', newline='') as csvfile:
@@ -81,8 +84,7 @@ browser.implicitly_wait(3)
 review_pages = [None] * len(film_list)
 film_pages = [None] * len(film_list)
 error_index = list()
-for x in range(0, len(film_list)):   #edited to continue search
-for x in range(0, 25):   #edited to continue search
+for x in tqdm(range(0, 1000)):   #edited to continue search
     try:
         review_pages[x] = requests.get(reviews_list_hyphens[x], headers=headers)       
         if review_pages[x].status_code != 200:
@@ -104,11 +106,11 @@ for x in range(0, 25):   #edited to continue search
                 header_check = header_check.partition('</h1>')[0]
                 header_check = header_check.partition('<h1>')[2]
                 if header_check != film_list[x]:
-                    review_pages[x] = None
-                    film_pages[x] = None
+                    review_pages[x] = "No page found"
+                    film_pages[x] = "No page found"
             else: 
-                review_pages[x] = None
-                film_pages[x] = None
+                review_pages[x] = "No page found" 
+                film_pages[x] = "No page found"
                 searchBar.send_keys(100 * Keys.BACKSPACE)
                 time.sleep(2)
         else:
@@ -123,81 +125,25 @@ restart = review_pages.index(None) #save loop starting value
 import shelve 
 s = shelve.open("films.requests.dat") 
 s["film_pages"]= film_pages
-s["skill"]= ["Python", "Java","java"] 
-s["age"]= [27,25,25] 
+s["review_pages"]= review_pages
+s["error_index"]= error_index
 s.close() 
 
-import shelve 
 r = shelve.open("films.requests.dat") 
-film_pages2 = r["film_pages"] 
+film_pages = r["film_pages"] 
+review_pages = r["review_pages"] 
+error_index = r["error_index"] 
 r.close()
 
 ###Double check if missing or not found
 
 ###Throw out any missing film pages
+#film_pages.append(None)
+film_pages = [x for x in film_pages if x is not None]
+review_pages = [x for x in review_pages if x is not None]
+film_pages = [x for x in film_pages if "No page found" not in x]
+review_pages = [x for x in review_pages if "No page found" not in x]
 
-###create DB tables
-import sqlite3
-import pandas as pd
-from datetime import datetime
-
-conn = sqlite3.connect("films_and_reviews.db")
-c = conn.cursor()
-
-####### create tables
-c.execute('DROP TABLE IF EXISTS film')
-c.execute('DROP TABLE IF EXISTS review') 
-c.execute('DROP TABLE IF EXISTS author') 
-c.execute('DROP TABLE IF EXISTS film_review')
-c.execute('DROP TABLE IF EXISTS genre')
-c.execute('DROP TABLE IF EXISTS film_genre')
- 
-c.execute("""
-          CREATE TABLE film (
-          film_id INTEGER PRIMARY KEY AUTOINCREMENT, 
-          film_title TEXT, 
-          film_release_date TEXT,
-          film_runtime INTEGER
-          )""")
-
-
-c.execute("""
-          CREATE TABLE genre (
-          genre_id INTEGER PRIMARY KEY AUTOINCREMENT, 
-          genre_label TEXT 
-          )""")
-
-c.execute("""
-          CREATE TABLE film_genre (
-          film_id REFERENCES film(film_id),
-          genre_id REFERENCES review(genre_id), 
-              CONSTRAINT film_genre_pk PRIMARY KEY (film_id, genre_id)
-          )""")
-
-c.execute("""
-          CREATE TABLE review (
-          film_id INTEGER, 
-          author_id INTEGER,
-          rating INTEGER,
-              FOREIGN KEY (film_id) REFERENCES film(film_id)
-              FOREIGN KEY (author_id) REFERENCES author(author_id)
-              CONSTRAINT review_pk PRIMARY KEY (film_id, author_id)
-          )""")
-
-c.execute("""
-          CREATE TABLE author (
-          author_id INTEGER PRIMARY KEY AUTOINCREMENT,
-          first_name TEXT, 
-          last_name TEXT
-          )""")
-
-c.execute("""
-          CREATE TABLE film_review (
-          film_id REFERENCES film(film_id),
-          review_id REFERENCES review(review_id), 
-              CONSTRAINT film_review_pk PRIMARY KEY (film_id, review_id)
-          )""")
-conn.commit()
 
 ### Define functions for webscraping
 def scrape_film_title(soup_source):
@@ -267,78 +213,134 @@ def scrape_reviews_rating_list(soup_source):
         scrape[x] = scrape[x].partition('>')[2]
     return scrape
 
+###create DB tables
+import sqlite3
+import pandas as pd
+from datetime import datetime
 
+conn = sqlite3.connect("films_and_reviews.db")
+c = conn.cursor()
+
+####### create tables
+c.execute('DROP TABLE IF EXISTS film')
+c.execute('DROP TABLE IF EXISTS review') 
+c.execute('DROP TABLE IF EXISTS author') 
+c.execute('DROP TABLE IF EXISTS genre')
+c.execute('DROP TABLE IF EXISTS film_genre')
+ 
+c.execute("""
+          CREATE TABLE film (
+          film_id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          film_title TEXT, 
+          film_release_date TEXT,
+          film_runtime INTEGER
+          )""")
+
+
+c.execute("""
+          CREATE TABLE genre (
+          genre_id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          genre_label TEXT 
+          )""")
+
+c.execute("""
+          CREATE TABLE film_genre (
+          film_id REFERENCES film(film_id),
+          genre_id REFERENCES review(genre_id), 
+              CONSTRAINT film_genre_pk PRIMARY KEY (film_id, genre_id)
+          )""")
+
+c.execute("""
+          CREATE TABLE review (
+          film_id INTEGER, 
+          author_id INTEGER,
+          rating INTEGER,
+              FOREIGN KEY (film_id) REFERENCES film(film_id)
+              FOREIGN KEY (author_id) REFERENCES author(author_id)
+              CONSTRAINT review_pk PRIMARY KEY (film_id, author_id)
+          )""")
+
+c.execute("""
+          CREATE TABLE author (
+          author_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          first_name TEXT, 
+          last_name TEXT
+          )""")
+
+
+conn.commit()
 
 ###Loop for extracting attributes and inserting into db  
 
-for x in range(0, len(film_pages)):   
-for x in range(0, 2):    #NOTE: film x refers to current film
-    ## Parse film html for webscraping
-    film_soup = BeautifulSoup(film_pages[x].content, 'html.parser')
-    ## Scrape title, release date and runtime and temporarily save for film x 
-    temp_film_title = scrape_film_title(film_soup)
-    temp_film_release_date = scrape_film_release_date(film_soup)
-    temp_film_runtime = scrape_film_runtime(film_soup)
-    ## Insert film information into film table (no uniqueness checks required)
-    c.execute("""
-          INSERT INTO film
-          (film_title, film_release_date, film_runtime) 
-          VALUES (?,?,?)""", [temp_film_title, temp_film_release_date, temp_film_runtime])
-    ## Scrape the list of genre labels for film x 
-    temp_film_genre_list = scrape_film_genre_list(film_soup)
-    ## check if each genre label exists and insert any new labels into the genre table
-    for i in range(0, len(temp_film_genre_list)): #NOTE: genre i refers to current genre
-        c.execute('SELECT * FROM genre WHERE genre_label=?', [temp_film_genre_list[i]])
-        db_check_genre = c.fetchone()
-        ## If genre label doesn't exist yet insert it into the genre table
-        if db_check_genre is None: 
-            c.execute('INSERT INTO genre (genre_label) VALUES (?)', [temp_film_genre_list[i]])
-        ## For updating the film_genre table -- retrieve film_id
-        c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
-        db_get_film_id = c.fetchone()
-        ## For updating the film_genre table -- retrieve genre_id
-        c.execute('SELECT genre_id FROM genre WHERE genre_label=?', [temp_film_genre_list[i]])
-        db_get_genre_id = c.fetchone()   
-        ## Update the film_genre table -- for each genre i and film x
+for x in tqdm(range(0, len(film_pages))):   
+#for x in tqdm(range(0, 4)):   
+    if film_pages[x] is not None: 
+        ## Parse film html for webscraping
+        film_soup = BeautifulSoup(film_pages[x].content, 'html.parser')
+        ## Scrape title, release date and runtime and temporarily save for film x 
+        temp_film_title = scrape_film_title(film_soup)
+        temp_film_release_date = scrape_film_release_date(film_soup)
+        temp_film_runtime = scrape_film_runtime(film_soup)
+        ## Insert film information into film table (no uniqueness checks required)
         c.execute("""
-          INSERT INTO film_genre
-          (film_id, genre_id) 
-          VALUES (?,?)""", [db_get_film_id[0], db_get_genre_id[0]])
-    ## Parse reviews html for webscraping
-    reviews_soup = BeautifulSoup(review_pages[x].content, 'html.parser')
-    ## Scrape author names and ratings for each review of film x 
-    temp_reviews_name_list = scrape_reviews_auth_name_list(reviews_soup)
-    temp_reviews_ratings_list = scrape_reviews_rating_list(reviews_soup)
-    ##For each review check if author name exists in author table and update table if not
-    for j in range(0, len(temp_reviews_name_list)): #NOTE: name j refers to current reviewer name
-        ## If the review is credited to an author
-        if temp_reviews_name_list[j] is not None:
-            c.execute('SELECT * FROM author WHERE last_name=? AND first_name=?', temp_reviews_name_list[j])
-            db_check_author = c.fetchone()
-            ## If author j doesn't exist yet insert it into the author table
-            if db_check_author is None: 
-                c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', temp_reviews_name_list[j])
-            ## For updating the review table -- retrieve film_id
+              INSERT INTO film
+              (film_title, film_release_date, film_runtime) 
+              VALUES (?,?,?)""", [temp_film_title, temp_film_release_date, temp_film_runtime])
+        ## Scrape the list of genre labels for film x 
+        temp_film_genre_list = scrape_film_genre_list(film_soup)
+        ## check if each genre label exists and insert any new labels into the genre table
+        for i in range(0, len(temp_film_genre_list)): #NOTE: genre i refers to current genre
+            c.execute('SELECT * FROM genre WHERE genre_label=?', [temp_film_genre_list[i]])
+            db_check_genre = c.fetchone()
+            ## If genre label doesn't exist yet insert it into the genre table
+            if db_check_genre is None: 
+                c.execute('INSERT INTO genre (genre_label) VALUES (?)', [temp_film_genre_list[i]])
+            ## For updating the film_genre table -- retrieve film_id
             c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
             db_get_film_id = c.fetchone()
-            ## For updating the review table -- retrieve author_id
-            c.execute('SELECT author_id FROM author WHERE last_name=? AND first_name=?', temp_reviews_name_list[j])
-            db_get_author_id = c.fetchone()
-            ## update review table for review j and film x
+            ## For updating the film_genre table -- retrieve genre_id
+            c.execute('SELECT genre_id FROM genre WHERE genre_label=?', [temp_film_genre_list[i]])
+            db_get_genre_id = c.fetchone()   
+            ## Update the film_genre table -- for each genre i and film x
             c.execute("""
-                INSERT INTO review
-                (film_id, author_id, rating) 
-                VALUES (?,?,?)""", [db_get_film_id[0], db_get_author_id[0], temp_reviews_ratings_list[j]])
-        ## If the review is NOT credited to an author 
-        else: 
-            ## create a new author_id for the uncredited review author
-            c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', ("Uncredited", "Uncredited"))
-            ## For updating the review table -- retrieve film_id
-            c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
-            db_get_film_id = c.fetchone()
-            ## For updating the review table -- retrieve author_id
-            c.execute('SELECT MAX(author_id) FROM author')
-            db_get_author_id = c.fetchone()
+              INSERT INTO film_genre
+              (film_id, genre_id) 
+              VALUES (?,?)""", [db_get_film_id[0], db_get_genre_id[0]])
+        ## Parse reviews html for webscraping
+        reviews_soup = BeautifulSoup(review_pages[x].content, 'html.parser')
+        ## Scrape author names and ratings for each review of film x 
+        temp_reviews_name_list = scrape_reviews_auth_name_list(reviews_soup)
+        temp_reviews_ratings_list = scrape_reviews_rating_list(reviews_soup)
+        ##For each review check if author name exists in author table and update table if not
+        for j in range(0, len(temp_reviews_name_list)): #NOTE: name j refers to current reviewer name
+            ## If the review is credited to an author
+            if temp_reviews_name_list[j] is not None:
+                c.execute('SELECT * FROM author WHERE last_name=? AND first_name=?', temp_reviews_name_list[j])
+                db_check_author = c.fetchone()
+                ## If author j doesn't exist yet insert it into the author table
+                if db_check_author is None: 
+                    c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', temp_reviews_name_list[j])
+                ## For updating the review table -- retrieve film_id
+                c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
+                db_get_film_id = c.fetchone()
+                ## For updating the review table -- retrieve author_id
+                c.execute('SELECT author_id FROM author WHERE last_name=? AND first_name=?', temp_reviews_name_list[j])
+                db_get_author_id = c.fetchone()
+                ## update review table for review j and film x
+                c.execute("""
+                    INSERT OR IGNORE INTO review
+                    (film_id, author_id, rating) 
+                    VALUES (?,?,?)""", [db_get_film_id[0], db_get_author_id[0], temp_reviews_ratings_list[j]])
+            ## If the review is NOT credited to an author 
+            else: 
+                ## create a new author_id for the uncredited review author
+                c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', ("Uncredited", "Uncredited"))
+                ## For updating the review table -- retrieve film_id
+                c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
+                db_get_film_id = c.fetchone()
+                ## For updating the review table -- retrieve author_id
+                c.execute('SELECT MAX(author_id) FROM author')
+                db_get_author_id = c.fetchone()
 
 
 ###check db
