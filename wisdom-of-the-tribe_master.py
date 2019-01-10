@@ -84,50 +84,51 @@ browser.implicitly_wait(3)
 review_pages = [None] * len(film_list)
 film_pages = [None] * len(film_list)
 error_index = list()
-for x in tqdm(range(0, 1000)):   #edited to continue search
-    try:
-        review_pages[x] = requests.get(reviews_list_hyphens[x], headers=headers)       
-        if review_pages[x].status_code != 200:
-            searchBar = browser.find_element_by_id('primary_search_box')
-            searchBar.send_keys(film_list[x])
-            time.sleep(2)  
-            elem = browser.find_elements_by_class_name('search_results_item')
-            time.sleep(2)  
-            if len(elem) > 0:
-                elem[0].click()
-                time.sleep(3) 
-                film_url = browser.current_url
-                critics_url = browser.current_url + '/critic-reviews'
-                review_pages[x] = requests.get(critics_url, headers=headers)
-                film_pages[x] = requests.get(film_url, headers=headers)
-                soup = BeautifulSoup(review_pages[x].content, 'html.parser')
-                header_check = soup.select("a > h1")
-                header_check = str(header_check)
-                header_check = header_check.partition('</h1>')[0]
-                header_check = header_check.partition('<h1>')[2]
-                if header_check != film_list[x]:
-                    review_pages[x] = "No page found"
+for x in tqdm(range(len(film_list))):   #edited to continue search
+    if film_pages[x] is None: 
+        try:
+            review_pages[x] = requests.get(reviews_list_hyphens[x], headers=headers)       
+            if review_pages[x].status_code != 200:
+                searchBar = browser.find_element_by_id('primary_search_box')
+                searchBar.send_keys(film_list[x])
+                time.sleep(2)  
+                elem = browser.find_elements_by_class_name('search_results_item')
+                time.sleep(2)  
+                if len(elem) > 0:
+                    elem[0].click()
+                    time.sleep(3) 
+                    film_url = browser.current_url
+                    critics_url = browser.current_url + '/critic-reviews'
+                    review_pages[x] = requests.get(critics_url, headers=headers)
+                    film_pages[x] = requests.get(film_url, headers=headers)
+                    soup = BeautifulSoup(review_pages[x].content, 'html.parser')
+                    header_check = soup.select("a > h1")
+                    header_check = str(header_check)
+                    header_check = header_check.partition('</h1>')[0]
+                    header_check = header_check.partition('<h1>')[2]
+                    if header_check != film_list[x]:
+                        review_pages[x] = "No page found"
+                        film_pages[x] = "No page found"
+                else: 
+                    review_pages[x] = "No page found" 
                     film_pages[x] = "No page found"
-            else: 
-                review_pages[x] = "No page found" 
-                film_pages[x] = "No page found"
-                searchBar.send_keys(100 * Keys.BACKSPACE)
-                time.sleep(2)
-        else:
-            film_pages[x] = requests.get(film_list_hyphens[x], headers=headers)
-    except (Exception, RuntimeError, ConnectionError):
-        error_index.append(x)
-        continue
+                    searchBar.send_keys(100 * Keys.BACKSPACE)
+                    time.sleep(2)
+            else:
+                film_pages[x] = requests.get(film_list_hyphens[x], headers=headers)
+        except (Exception, RuntimeError, ConnectionError):
+            error_index.append(x)
+            continue
     
 restart = review_pages.index(None) #save loop starting value   
 
 ### save get.requests (film_pages & revew_pages) to shelve with error index
-import shelve 
-s = shelve.open("films.requests.dat") 
-s["film_pages"]= film_pages
-s["review_pages"]= review_pages
-s["error_index"]= error_index
-s.close() 
+#import shelve 
+#s = shelve.open("films.requests.dat") 
+#s["film_pages"]= film_pages
+#s["review_pages"]= review_pages
+#s["error_index"]= error_index
+#s.close() 
 
 r = shelve.open("films.requests.dat") 
 film_pages = r["film_pages"] 
@@ -271,16 +272,28 @@ c.execute("""
 conn.commit()
 
 ###Loop for extracting attributes and inserting into db  
+release_date_error = list()
+runtime_error = list()
+for x in tqdm(range(258, len(film_pages))):   
+##Reset temp_variables
+    temp_film_title = None; temp_film_release_date = None; temp_film_runtime = None
+    temp_film_genre_list = None; temp_reviews_name_list = None; temp_reviews_ratings_list = None
 
-for x in tqdm(range(0, len(film_pages))):   
-#for x in tqdm(range(0, 4)):   
     if film_pages[x] is not None: 
         ## Parse film html for webscraping
         film_soup = BeautifulSoup(film_pages[x].content, 'html.parser')
         ## Scrape title, release date and runtime and temporarily save for film x 
         temp_film_title = scrape_film_title(film_soup)
-        temp_film_release_date = scrape_film_release_date(film_soup)
-        temp_film_runtime = scrape_film_runtime(film_soup)
+        try:
+            temp_film_release_date = scrape_film_release_date(film_soup)
+        except:
+            temp_film_release_date = "NULL"
+            error_index.append(x)
+        try:
+            temp_film_runtime = scrape_film_runtime(film_soup)
+        except:
+            temp_film_runtime = "NULL"
+            runtime_error.append(x)    
         ## Insert film information into film table (no uniqueness checks required)
         c.execute("""
               INSERT INTO film
