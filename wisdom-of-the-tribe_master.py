@@ -369,16 +369,19 @@ df = pd.read_sql_query("""
     --WHERE film_id = 579
 """, conn)    
 df = pd.read_sql_query("""
-    SELECT *
-    FROM genre
+    SELECT COUNT(*), genre_label
+    FROM film_genre INNER JOIN genre USING(genre_id)
+    GROUP BY genre_id
+""", conn)   
+df = pd.read_sql_query("""
+    SELECT COUNT(*) as count, author_id, first_name, last_name
+    FROM review INNER JOIN author USING(author_id)
+    GROUP BY author_id
+    ORDER BY count DESC
 """, conn)   
 df = pd.read_sql_query("""
     SELECT *
     FROM author
-""", conn)   
-df = pd.read_sql_query("""
-    SELECT *
-    FROM film_genre
 """, conn)   
 df = pd.read_sql_query("""
     SELECT *
@@ -490,6 +493,9 @@ film_averages = pd.read_sql_query("""
     FROM film INNER JOIN review USING(film_id)
     GROUP BY film_id
 """, conn)
+fig = plt.hist(film_averages['count'], bins=40, color='#1c819e', edgecolor='black', linewidth=1.2)
+fig[0]
+               
 reviews = pd.read_sql_query("""
     SELECT *
     FROM review 
@@ -516,5 +522,148 @@ import matplotlib.pyplot as plt
 import numpy as np
 plt.hist(film_averages['RatingAVG'])
 fig = plt.gcf()
-plotly_fig = tls.mpl_to_plotly( fig )
+plotly_fig = tls.mpl_to_plotly(fig)
 py.iplot(plotly_fig, filename='mpl-basic-histogram')
+
+film_averages = pd.read_sql_query("""
+    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, film_release_date, film_runtime, film_id
+    FROM film INNER JOIN review USING(film_id)
+    GROUP BY film_id
+""", conn)
+
+SDvalues = list()
+import statistics as stats
+for x in film_averages['film_id']:
+    c.execute('SELECT rating FROM review INNER JOIN film USING(film_id) WHERE film_id=?', [x])
+    individ_film_reviews = c.fetchall()
+    temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
+    try:
+        SDvalues.append(stats.stdev(temp_ratings_tuple))
+    except:
+        SDvalues.append(None)
+
+film_averages = film_averages.assign(SD=SDvalues)
+
+films_filt = film_averages.where(film_averages['count']>5)
+films_filt = films_filt.dropna(0)
+plt.hist(films_filt['SD'], bins=40, color='#1c819e', edgecolor='black', linewidth=1.2)
+plt.xlabel('Rating')
+plt.ylabel('Frequency')
+plt.axvline(x=np.mean(films_filt['SD']), color="#ffbe00", linewidth=4.5, label='Mean = {0:.1f}'.format(np.mean(films_filt['SD'])))
+plt.axvline(x=np.median(films_filt['SD']), color="#89a4c7", linewidth=4.5, label='Median = {0:.1f}'.format(np.median(films_filt['SD'])))
+plt.legend()
+plt.show()
+    
+by_author = pd.read_sql_query("""
+    SELECT AVG(rating) AS RatingAVG, COUNT(*) as count, author_id, first_name, last_name
+    FROM review INNER JOIN author USING(author_id)
+    GROUP BY author_id
+""", conn)
+by_author_filt = by_author.where(by_author['count']>5)
+by_author_filt = by_author_filt.dropna(0)
+#by_author_filt.reset_index(drop=True)
+by_author_filt.set_index('author_id', inplace=True, drop=False)
+SDvalues2 = list()
+for x in by_author_filt['author_id']:
+    #print(x)
+    c.execute('SELECT rating FROM review INNER JOIN author USING(author_id) WHERE author_id=?', [x])
+    individ_film_reviews = c.fetchall()
+    temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
+    try:
+        SDvalues2.append(stats.stdev(temp_ratings_tuple))
+    except:
+        SDvalues2.append(None)
+SDdf = pd.DataFrame(SDvalues2, columns=['SD'])
+SDdf.set_index(by_author_filt['author_id'], inplace=True)
+by_author_filt['SD'] = SDdf['SD']
+by_author_filt2 = by_author_filt.sort_values(['SD'],ascending=False)
+
+by_author_filt2 = by_author_filt2.where(by_author_filt2['SD']>30)
+by_author_filt2 = by_author_filt2.dropna(0)
+
+
+#### add columns to sql tables -- author: author_rating_avg, author_rating_sd, total_score, score_count, pref_aff
+## film: film_rating_avg, film_rating_sd
+#conn = sqlite3.connect("films_and_reviews.db")
+import sqlite3
+import pandas as pd
+from datetime import datetime
+
+conn = sqlite3.connect("films_and_reviews3.db")
+c = conn.cursor()
+
+c.execute('ALTER TABLE author ADD review_count INTEGER')
+c.execute('ALTER TABLE author ADD author_rating_avg REAL')
+c.execute('ALTER TABLE author ADD author_rating_sd REAL')
+c.execute('ALTER TABLE author ADD total_score REAL')
+c.execute('ALTER TABLE author ADD score_count REAL')
+c.execute('ALTER TABLE author ADD pref_aff REAL')
+c.execute('ALTER TABLE film ADD film_rating_avg REAL')
+c.execute('ALTER TABLE film ADD film_rating_sd REAL')
+### create index for film_id and author_id
+c.execute('CREATE UNIQUE INDEX idx_film_id ON film (film_id)')
+c.execute('CREATE UNIQUE INDEX idx_author_id ON author (author_id)')
+c.execute('CREATE UNIQUE INDEX idx_author_film ON review (film_id, author_id)')
+conn.commit()    
+### saved as 'films_and_reviews3.db'
+#conn = sqlite3.connect("films_and_reviews3_clean.db")
+conn = sqlite3.connect("films_and_reviews3.db")
+
+## check for new columns:
+df = pd.read_sql_query("""
+    SELECT *
+    FROM author
+""", conn)   
+
+### create loop to generate film_rating_avg & film_rating_sd values 
+### same for author: review_count, author_rating_avg, author_rating_sd
+##step 1: get all film_id values to build loop
+df = pd.read_sql_query("""
+    SELECT film_id
+    FROM film
+""", conn)   
+film_ids = df['film_id']
+film_ids_tuple = tuple([x for x in df['film_id']]) ## convert to tuple
+
+import statistics as stats
+error_list = list()
+for x in film_ids_tuple: 
+    c.execute('SELECT rating FROM review INNER JOIN film USING(film_id) WHERE film_id=?', [x])
+    individ_film_reviews = c.fetchall()
+    temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
+    try:
+        c.execute('UPDATE film SET film_rating_avg= ?, film_rating_sd=? WHERE film_id = ?', [stats.mean(temp_ratings_tuple), stats.stdev(temp_ratings_tuple), x])
+    except:
+        error_list.append(x)
+        
+###author summary stats
+df = pd.read_sql_query("""
+    SELECT author_id
+    FROM author
+""", conn)   
+author_ids = df['author_id']
+author_ids_tuple = tuple([x for x in df['author_id']]) ## convert to tuple
+
+import statistics as stats
+error_list2 = list()
+for x in author_ids_tuple: 
+    c.execute('SELECT rating FROM review WHERE author_id=?', [x])
+    individ_film_reviews = c.fetchall()
+    temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
+    try:
+        c.execute('UPDATE author SET author_rating_avg= ?, author_rating_sd=?, review_count = ? WHERE author_id = ?', [stats.mean(temp_ratings_tuple), stats.stdev(temp_ratings_tuple), len(temp_ratings_tuple), x])
+    except:
+        error_list2.append(x)
+        
+        
+print(sqlite3.paramstyle)
+df = pd.read_sql_query("""
+    SELECT *
+    FROM author
+""", conn) 
+
+c.execute('PRAGMA table_info(author)')
+c.fetchall()
+c.execute('INSERT INTO film (film_rating_avg) VALUES (?)', [stats.mean(temp_ratings_tuple)])
+ 
+
