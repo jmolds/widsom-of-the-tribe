@@ -14,12 +14,12 @@ What film should you go see this weekend? To answer this question, one can check
 ![db](https://raw.githubusercontent.com/jmolds/widsom-of-the-tribe/master/database%20design.png)
 
 **Data Transformation**
-- [ ] Generate by-film-scaled ratings to empahsize deviations from the crowd. 
-- [ ] Generate by-reviewer-scaled ratings to emphasize deviations from an individual reviewer's baseline. 
-- [ ] Update by-film-scaled ratings using any available by-reviewer scaled values.
+- [X] Generate by-film-scaled ratings to empahsize deviations from the crowd. 
+- [X] Generate by-reviewer-scaled ratings to emphasize deviations from an individual reviewer's baseline. 
+- [X] Update by-film-scaled ratings using any available by-reviewer scaled values.
 
 **Model Development**
-- [ ] Straightforward user-reviewer similary model.
+- [X] Straightforward user-reviewer similary model.
 - [ ] Neural Network based model using Tensorflow.
 
 **Model Evaluation**
