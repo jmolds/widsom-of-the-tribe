@@ -18,9 +18,15 @@ temp_films_list2 = [None] * len(films_per_page_range)
 year_range = range(1980,2018)
 for year in tqdm(year_range):
     y1 = year
-    imdb_page_1 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&page=1&ref_=adv_nxt"
-    imdb_page_2 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&start=251&ref_=adv_nxt"
-    #imdb_page_2 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + str(y1) + "-01-01," + str(y1) + "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&page=2&ref_=adv_nxt"
+    
+    imdb_page_1 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + 
+    str(y1) + "-01-01," + str(y1) + 
+    "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&page=1&ref_=adv_nxt"
+    
+    imdb_page_2 = "https://www.imdb.com/search/title?title_type=feature&release_date=" + 
+    str(y1) + "-01-01," + str(y1) + 
+    "-12-31&view=simple&sort=boxoffice_gross_us,desc&count=250&start=251&ref_=adv_nxt"
+    
     page1 = requests.get(imdb_page_1)
     page2 = requests.get(imdb_page_2)
     soup1 = BeautifulSoup(page1.content, 'html.parser')        
@@ -73,7 +79,8 @@ for x in range(0,len(film_list_hyphens)):
     film_list_hyphens[x] = film_list_hyphens[x].lower()
 film_list_links = [None] * len(film_list_hyphens)
 for x in range(0,len(film_list_hyphens)):
-    reviews_list_hyphens[x] = "https://www.metacritic.com/movie/" + film_list_hyphens[x] +  "/critic-reviews"
+    reviews_list_hyphens[x] = "https://www.metacritic.com/movie/" + film_list_hyphens[x] +  
+    "/critic-reviews"
     film_list_hyphens[x] = "https://www.metacritic.com/movie/" + film_list_hyphens[x]
 
 browser = webdriver.Chrome("/Users/Justin/Dropbox/Python and SQL/chromedriver")
@@ -202,7 +209,9 @@ def scrape_reviews_auth_name_list(soup_source):
         else: 
             last_name_first_name_list[x] = None
     return (last_name_first_name_list)
-#Database NOTE: authors with middle names listed are included within Last_name (e.g., "Joy - Gould Boyum")
+
+#Database NOTE: authors with middle names listed are included within Last_name 
+#(e.g., "Joy - Gould Boyum")
 #Returns tuple for last name and first name or None object if author is uncredited
 
 def scrape_reviews_rating_list(soup_source):
@@ -309,12 +318,15 @@ for x in tqdm(range(579, len(film_pages))):
                 db_check_genre = c.fetchone()
                 ## If genre label doesn't exist yet insert it into the genre table
                 if db_check_genre is None: 
-                    c.execute('INSERT INTO genre (genre_label) VALUES (?)', [temp_film_genre_list[i]])
+                    c.execute('INSERT INTO genre (genre_label) VALUES (?)', 
+                              [temp_film_genre_list[i]])
                 ## For updating the film_genre table -- retrieve film_id
-                c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
+                c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', 
+                          [temp_film_title, temp_film_release_date])
                 db_get_film_id = c.fetchone()
                 ## For updating the film_genre table -- retrieve genre_id
-                c.execute('SELECT genre_id FROM genre WHERE genre_label=?', [temp_film_genre_list[i]])
+                c.execute('SELECT genre_id FROM genre WHERE genre_label=?', 
+                          [temp_film_genre_list[i]])
                 db_get_genre_id = c.fetchone()   
                 ## Update the film_genre table -- for each genre i and film x
                 try:
@@ -333,28 +345,35 @@ for x in tqdm(range(579, len(film_pages))):
             for j in range(0, len(temp_reviews_name_list)): #NOTE: name j refers to current reviewer name
                 ## If the review is credited to an author
                 if temp_reviews_name_list[j] is not None:
-                    c.execute('SELECT * FROM author WHERE last_name=? AND first_name=?', temp_reviews_name_list[j])
+                    c.execute('SELECT * FROM author WHERE last_name=? AND first_name=?', 
+                              temp_reviews_name_list[j])
                     db_check_author = c.fetchone()
                     ## If author j doesn't exist yet insert it into the author table
                     if db_check_author is None: 
-                        c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', temp_reviews_name_list[j])
+                        c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', 
+                                  temp_reviews_name_list[j])
                     ## For updating the review table -- retrieve film_id
-                    c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
+                    c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', 
+                              [temp_film_title, temp_film_release_date])
                     db_get_film_id = c.fetchone()
                     ## For updating the review table -- retrieve author_id
-                    c.execute('SELECT author_id FROM author WHERE last_name=? AND first_name=?', temp_reviews_name_list[j])
+                    c.execute('SELECT author_id FROM author WHERE last_name=? AND first_name=?', 
+                              temp_reviews_name_list[j])
                     db_get_author_id = c.fetchone()
                     ## update review table for review j and film x
                     c.execute("""
                         INSERT OR IGNORE INTO review
                         (film_id, author_id, rating) 
-                        VALUES (?,?,?)""", [db_get_film_id[0], db_get_author_id[0], temp_reviews_ratings_list[j]])
+                        VALUES (?,?,?)""", [db_get_film_id[0], db_get_author_id[0], 
+                        temp_reviews_ratings_list[j]])
                 ## If the review is NOT credited to an author 
                 else: 
                     ## create a new author_id for the uncredited review author
-                    c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', ("Uncredited", "Uncredited"))
+                    c.execute('INSERT INTO author (last_name, first_name) VALUES (?,?)', 
+                              ("Uncredited", "Uncredited"))
                     ## For updating the review table -- retrieve film_id
-                    c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', [temp_film_title, temp_film_release_date])
+                    c.execute('SELECT film_id FROM film WHERE film_title=? AND film_release_date=?', 
+                              [temp_film_title, temp_film_release_date])
                     db_get_film_id = c.fetchone()
                     ## For updating the review table -- retrieve author_id
                     c.execute('SELECT MAX(author_id) FROM author')
@@ -389,7 +408,8 @@ df = pd.read_sql_query("""
 """, conn)   
 
 ##load copy of film_and_reviews database
-conn = sqlite3.connect("films_and_reviews2.db")
+conn = sqlite3.connect("films_and_reviews.db")
+conn = sqlite3.connect("C:/Users/Justin/Desktop/Projects/wisdom-of-the-tribe/films_and_reviews.db")
 c = conn.cursor()
 
 import pandas as pd
@@ -489,11 +509,15 @@ plotly.offline.plot(fig, filename='Distplot with Multiple Datasets')
 # library & dataset
 
 film_averages = pd.read_sql_query("""
-    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, film_release_date, film_runtime, film_id
+    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, 
+           film_release_date, film_runtime, film_id
+           
     FROM film INNER JOIN review USING(film_id)
+    
     GROUP BY film_id
 """, conn)
-fig = plt.hist(film_averages['count'], bins=40, color='#1c819e', edgecolor='black', linewidth=1.2)
+fig = plt.hist(film_averages['count'], bins=40, color='#1c819e', 
+               edgecolor='black', linewidth=1.2)
 fig[0]
                
 reviews = pd.read_sql_query("""
@@ -526,7 +550,8 @@ plotly_fig = tls.mpl_to_plotly(fig)
 py.iplot(plotly_fig, filename='mpl-basic-histogram')
 
 film_averages = pd.read_sql_query("""
-    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, film_release_date, film_runtime, film_id
+    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, 
+    film_release_date, film_runtime, film_id
     FROM film INNER JOIN review USING(film_id)
     GROUP BY film_id
 """, conn)
@@ -549,8 +574,10 @@ films_filt = films_filt.dropna(0)
 plt.hist(films_filt['SD'], bins=40, color='#1c819e', edgecolor='black', linewidth=1.2)
 plt.xlabel('Rating')
 plt.ylabel('Frequency')
-plt.axvline(x=np.mean(films_filt['SD']), color="#ffbe00", linewidth=4.5, label='Mean = {0:.1f}'.format(np.mean(films_filt['SD'])))
-plt.axvline(x=np.median(films_filt['SD']), color="#89a4c7", linewidth=4.5, label='Median = {0:.1f}'.format(np.median(films_filt['SD'])))
+plt.axvline(x=np.mean(films_filt['SD']), color="#ffbe00", linewidth=4.5, 
+            label='Mean = {0:.1f}'.format(np.mean(films_filt['SD'])))
+plt.axvline(x=np.median(films_filt['SD']), color="#89a4c7", linewidth=4.5, 
+            label='Median = {0:.1f}'.format(np.median(films_filt['SD'])))
 plt.legend()
 plt.show()
     
@@ -566,7 +593,8 @@ by_author_filt.set_index('author_id', inplace=True, drop=False)
 SDvalues2 = list()
 for x in by_author_filt['author_id']:
     #print(x)
-    c.execute('SELECT rating FROM review INNER JOIN author USING(author_id) WHERE author_id=?', [x])
+    c.execute('SELECT rating FROM review INNER JOIN author USING(author_id) 
+    WHERE author_id=?', [x])
     individ_film_reviews = c.fetchall()
     temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
     try:
@@ -582,7 +610,8 @@ by_author_filt2 = by_author_filt2.where(by_author_filt2['SD']>30)
 by_author_filt2 = by_author_filt2.dropna(0)
 
 
-#### add columns to sql tables -- author: author_rating_avg, author_rating_sd, total_score, score_count, pref_aff
+#### add columns to sql tables -- author: author_rating_avg, 
+###author_rating_sd, total_score, score_count, pref_aff
 ## film: film_rating_avg, film_rating_sd
 #conn = sqlite3.connect("films_and_reviews.db")
 import sqlite3
@@ -632,7 +661,8 @@ for x in film_ids_tuple:
     individ_film_reviews = c.fetchall()
     temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
     try:
-        c.execute('UPDATE film SET film_rating_avg= ?, film_rating_sd=? WHERE film_id = ?', [stats.mean(temp_ratings_tuple), stats.stdev(temp_ratings_tuple), x])
+        c.execute('UPDATE film SET film_rating_avg= ?, film_rating_sd=? WHERE film_id = ?', 
+                  [stats.mean(temp_ratings_tuple), stats.stdev(temp_ratings_tuple), x])
     except:
         error_list.append(x)
         
@@ -651,7 +681,8 @@ for x in author_ids_tuple:
     individ_film_reviews = c.fetchall()
     temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
     try:
-        c.execute('UPDATE author SET author_rating_avg= ?, author_rating_sd=?, review_count = ? WHERE author_id = ?', [stats.mean(temp_ratings_tuple), stats.stdev(temp_ratings_tuple), len(temp_ratings_tuple), x])
+        c.execute('UPDATE author SET author_rating_avg= ?, author_rating_sd=?, review_count = ? WHERE author_id = ?', 
+                  [stats.mean(temp_ratings_tuple), stats.stdev(temp_ratings_tuple), len(temp_ratings_tuple), x])
     except:
         error_list2.append(x)
         
@@ -659,7 +690,8 @@ for x in author_ids_tuple:
 print(sqlite3.paramstyle)
 df = pd.read_sql_query("""
     SELECT *
-    FROM author
+    FROM review INNER JOIN author USING(author_id)
+    WHERE author.review_count > 1
 """, conn) 
 
 c.execute('PRAGMA table_info(author)')
@@ -667,3 +699,98 @@ c.fetchall()
 c.execute('INSERT INTO film (film_rating_avg) VALUES (?)', [stats.mean(temp_ratings_tuple)])
  
 
+#### generate example user ratings update loop over all relevant authors
+
+### use average film rating and average film sd to compute z scores for user ratings
+film_averages = pd.read_sql_query("""
+    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, 
+           film_release_date, film_runtime, film_id
+    FROM film INNER JOIN review USING(film_id)
+    GROUP BY film_id
+""", conn)
+avg0 = np.mean(film_averages['RatingAVG']);sd0 = np.std(film_averages['RatingAVG'])
+ex_film = "Evil Dead II"; ex_rating = 80
+ex_df = pd.read_sql_query("""
+    SELECT *
+    FROM review INNER JOIN film USING(film_id) INNER JOIN author USING(author_id)
+    WHERE film_title=? AND review_count > 1
+""", conn, params=[ex_film]) 
+
+### clear author scores 
+c.execute('UPDATE author SET total_score = NULL, score_count = NULL, pref_aff = NULL')
+##this will will need to be nested into another loop with x for each user film rating
+for x in range(len(ex_df)):
+    #print(ex_df['rating'][x])
+    user_z = (ex_rating-avg0)/sd0
+    by_film_points = user_z * (ex_df['rating'][x]-ex_df['film_rating_avg'][x])/ex_df['film_rating_sd'][x]
+    by_author_points = user_z * (ex_df['rating'][x]-ex_df['author_rating_avg'][x])/ex_df['author_rating_sd'][x]
+    temp_score = (by_film_points + by_author_points)/2 ##update db
+    ### get total_score from SELECT by author and update + temp_score
+    if ex_df['total_score'][x] is not None:
+        ex_df.loc[x, 'total_score'] = ex_df.loc[x, 'total_score'] + temp_score
+    else: 
+        ex_df.loc[x, 'total_score'] = temp_score
+    if ex_df['score_count'][x] is not None:
+        ex_df.loc[x, 'score_count'] = ex_df.loc[x, 'score_count'] + 1
+    else: 
+        ex_df.loc[x, 'score_count'] = 1
+    ex_df.loc[x, 'pref_aff'] = ex_df.loc[x, 'total_score'] / ex_df.loc[x, 'score_count']   
+    c.execute('''UPDATE author 
+              SET total_score = ?, score_count = ?, pref_aff = ? 
+              WHERE author_id =?''', [ex_df.loc[x, 'total_score'], int(ex_df.loc[x, 'score_count']),ex_df.loc[x, 'pref_aff'],int(ex_df.loc[x, 'author_id'])])
+    ### get score_count from SELECT by author
+    ### update score_count by adding 1 to 
+
+### get list of films to update  
+update_df = pd.read_sql_query('''
+                SELECT * 
+                FROM review INNER JOIN author USING(author_id) INNER JOIN film USING(film_id)
+                WHERE pref_aff > 0
+                GROUP BY film_id''', conn)
+#set index to film_ids
+update_df.set_index('film_id', inplace=True, drop=False)
+#create tribe rating column
+update_df['tribe_rating'] = None
+### calc tribe ratings 
+for x in update_df['film_id']:
+    ##get by film reviews for each tribe member
+    temp_df = \
+    pd.read_sql_query("""
+                      SELECT *
+                      FROM review INNER JOIN author USING(author_id) INNER JOIN film USING(film_id)
+                      WHERE film_id=? AND pref_aff > 0
+                      """, conn, params=[x]) 
+    ### normalize pref_aff weights to sum to number of tribe members
+    normer = len(temp_df)/sum(temp_df['pref_aff'])
+    temp_df['n_pref_aff']= normer * temp_df['pref_aff']
+    tribe_rating = sum(temp_df['rating'] * temp_df['n_pref_aff'])/sum(temp_df['n_pref_aff'])
+    update_df.loc[x, 'tribe_rating'] = tribe_rating
+
+
+### ROLLBACK
+c.execute('ROLLBACK')
+
+##hist of pref_aff after 1 rating
+author_df = pd.read_sql_query('''
+                SELECT * 
+                FROM author
+                WHERE review_count > 1
+                ''', conn)
+##replace nan values with 0
+author_df['pref_aff'].fillna(0, inplace=True)
+##plot hist
+plt.hist(author_df['pref_aff'], bins=40, color='#1c819e', edgecolor='black', linewidth=1.2)
+
+plt.xlabel('Preference Affinity')
+plt.ylabel('Frequency')
+#plt.axvline(x=np.mean(films_filt['SD']), color="#ffbe00", linewidth=4.5, label='Mean = {0:.1f}'.format(np.mean(films_filt['SD'])))
+#plt.axvline(x=np.median(films_filt['SD']), color="#89a4c7", linewidth=4.5, label='Median = {0:.1f}'.format(np.median(films_filt['SD'])))
+#plt.legend()
+plt.show()
+##correlation spaghetti 
+import math as m
+user=-.6; auth=.5
+(user*auth)/m.sqrt((m.pow(user,2))*(m.pow(auth,2)))
+m.pow(.45,2)
+
+type(ex_df.loc[x, 'total_score'])
