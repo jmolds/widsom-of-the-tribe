@@ -19,7 +19,7 @@ What film should you go see this weekend? To answer this question, one can check
 - [X] Update by-film-scaled ratings using any available by-reviewer scaled values.
 
 **Model Development**
-- [ ] Straightforward user-reviewer similary model.
+- [X] Straightforward user-reviewer similary model.
 - [ ] Neural Network based model using Tensorflow.
 
 **Model Evaluation**
