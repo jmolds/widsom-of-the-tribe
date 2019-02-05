@@ -710,6 +710,7 @@ film_averages = pd.read_sql_query("""
 """, conn)
 avg0 = np.mean(film_averages['RatingAVG']);sd0 = np.std(film_averages['RatingAVG'])
 ex_film = "Evil Dead II"; ex_rating = 80
+ex_film = "On Golden Pond"; ex_rating = 95
 ex_df = pd.read_sql_query("""
     SELECT *
     FROM review INNER JOIN film USING(film_id) INNER JOIN author USING(author_id)
@@ -737,7 +738,7 @@ for x in range(len(ex_df)):
     ex_df.loc[x, 'pref_aff'] = ex_df.loc[x, 'total_score'] / ex_df.loc[x, 'score_count']   
     c.execute('''UPDATE author 
               SET total_score = ?, score_count = ?, pref_aff = ? 
-              WHERE author_id =?''', [ex_df.loc[x, 'total_score'], int(ex_df.loc[x, 'score_count']),ex_df.loc[x, 'pref_aff'],int(ex_df.loc[x, 'author_id'])])
+              WHERE author_id =?''', [ex_df.at[x, 'total_score'], ex_df.at[x, 'score_count'],ex_df.at[x, 'pref_aff'],ex_df.at[x, 'author_id'])])
     ### get score_count from SELECT by author
     ### update score_count by adding 1 to 
 
@@ -774,7 +775,7 @@ c.execute('ROLLBACK')
 author_df = pd.read_sql_query('''
                 SELECT * 
                 FROM author
-                WHERE review_count > 1
+                WHERE pref_aff > 0 OR pref_aff < 0
                 ''', conn)
 ##replace nan values with 0
 author_df['pref_aff'].fillna(0, inplace=True)
@@ -794,3 +795,99 @@ user=-.6; auth=.5
 m.pow(.45,2)
 
 type(ex_df.loc[x, 'total_score'])
+
+##overall film ratings used to compute user z-scores
+
+
+###
+film_averages = pd.read_sql_query("""
+    SELECT film_title, AVG(rating) AS RatingAVG, COUNT(*) as count, film_release_date, film_runtime, film_id
+    FROM film INNER JOIN review USING(film_id)
+    GROUP BY film_id
+""", conn)
+overall_film_mean = stats.mean(film_averages['RatingAVG'])
+overall_film_sd = stats.stdev(film_averages['RatingAVG'])
+
+def pref_update(film_, rating_):
+    ex_df = pd.read_sql_query("""
+    SELECT *
+    FROM review INNER JOIN film USING(film_id) INNER JOIN author USING(author_id)
+    WHERE film_title=? AND review_count > 1
+    ORDER BY rating DESC
+    """, conn, params=[film_])
+    #print('Updating preferences based on {0} Rating = {1}').format(film_,rating_)
+    #loop across all author ratings (x) for film 
+    for x in range(len(ex_df)):
+        user_z = (rating_-overall_film_mean)/overall_film_sd
+        by_film_points = user_z * (ex_df['rating'][x]-ex_df['film_rating_avg'][x])/ex_df['film_rating_sd'][x]
+        by_author_points = user_z * (ex_df['rating'][x]-ex_df['author_rating_avg'][x])/ex_df['author_rating_sd'][x]
+        temp_score = (by_film_points + by_author_points)/2
+        ### get total_score from SELECT by author and update + temp_score
+        if ex_df['total_score'][x] is not None:
+            ex_df.loc[x, 'total_score'] = ex_df.loc[x, 'total_score'] + temp_score
+        else: 
+            ex_df.loc[x, 'total_score'] = temp_score
+        if ex_df['score_count'][x] is not None:
+            ex_df.loc[x, 'score_count'] = ex_df.loc[x, 'score_count'] + 1
+        else: 
+            ex_df.loc[x, 'score_count'] = 1
+        ex_df.loc[x, 'pref_aff'] = ex_df.loc[x, 'total_score'] / ex_df.loc[x, 'score_count']
+        c.execute('''UPDATE author 
+                  SET total_score = ?, score_count = ?, pref_aff = ? 
+                  WHERE author_id =?''', [ex_df.loc[x, 'total_score'], int(ex_df.loc[x, 'score_count']),ex_df.loc[x, 'pref_aff'],int(ex_df.loc[x, 'author_id'])])
+
+
+pref_update("The Green Mile", 90)
+c.execute('UPDATE author SET total_score = NULL, score_count = 0, pref_aff = NULL')
+author_df = pd.read_sql_query('''
+                SELECT * 
+                FROM author
+                WHERE author_id = 1205
+                ''', conn)
+
+
+##overall film ratings used to compute user z-scores
+overall_film_mean = stats.mean(film_averages['RatingAVG'])
+overall_film_sd = stats.stdev(film_averages['RatingAVG'])
+#film_="The Green Mile"
+#rating_=90
+x=35
+
+def pref_update(film_, rating_):
+    ex_df = pd.read_sql_query("""
+    SELECT *
+    FROM review INNER JOIN film USING(film_id) INNER JOIN author USING(author_id)
+    WHERE film_title=? AND review_count > 1
+    ORDER BY rating DESC
+    """, conn, params=[film_])
+    #print('Updating preferences based on {0} Rating = {1}').format(film_,rating_)
+    #loop across all author ratings (x) for film 
+    for x in range(len(ex_df)):
+        user_z = (rating_-overall_film_mean)/overall_film_sd
+        by_film_points = user_z * (ex_df['rating'][x]-ex_df['film_rating_avg'][x])/ex_df['film_rating_sd'][x]
+        by_author_points = user_z * (ex_df['rating'][x]-ex_df['author_rating_avg'][x])/ex_df['author_rating_sd'][x]
+        temp_score = (by_film_points + by_author_points)/2
+        ### get total_score from SELECT by author and update + temp_score
+        if ex_df['total_score'][x] is not None:
+            ex_df.loc[x, 'total_score'] = ex_df.loc[x, 'total_score'] + temp_score
+        else: 
+            ex_df.loc[x, 'total_score'] = temp_score
+        if ex_df['score_count'][x] is not None:
+            ex_df.loc[x, 'score_count'] = ex_df.loc[x, 'score_count'] + 1
+        else: 
+            ex_df.loc[x, 'score_count'] = int(1)
+        ex_df.loc[x, 'pref_aff'] = ex_df.loc[x, 'total_score'] / ex_df.loc[x, 'score_count']
+        update_total_score = ex_df.at[x, 'total_score']
+        update_score_count = ex_df.at[x, 'score_count']
+        update_pref_aff = ex_df.at[x, 'pref_aff']
+        update_author_id = ex_df.at[x, 'author_id']
+        c.execute('''UPDATE author 
+                  SET total_score = ?, score_count = ?, pref_aff = ? 
+                  WHERE author_id =?''', [update_total_score,update_score_count,update_pref_aff,update_author_id])
+    author_df = pd.read_sql_query('''
+                SELECT * 
+                FROM author
+                WHERE pref_aff > 0 OR pref_aff < 0
+                ORDER BY pref_aff DESC
+                ''', conn)    
+    return(author_df)    
