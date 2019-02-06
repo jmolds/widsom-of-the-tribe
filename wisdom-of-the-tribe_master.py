@@ -880,10 +880,10 @@ def pref_update(film_, rating_):
         update_total_score = ex_df.at[x, 'total_score']
         update_score_count = ex_df.at[x, 'score_count']
         update_pref_aff = ex_df.at[x, 'pref_aff']
-        update_author_id = ex_df.at[x, 'author_id']
+        update_author_id = int(ex_df.at[x, 'author_id'])
         c.execute('''UPDATE author 
                   SET total_score = ?, score_count = ?, pref_aff = ? 
-                  WHERE author_id =?''', [update_total_score,update_score_count,update_pref_aff,update_author_id])
+                  WHERE author_id =?''', [update_total_score, update_score_count, update_pref_aff,update_author_id])
     author_df = pd.read_sql_query('''
                 SELECT * 
                 FROM author
@@ -891,3 +891,18 @@ def pref_update(film_, rating_):
                 ORDER BY pref_aff DESC
                 ''', conn)    
     return(author_df)    
+    
+SDvalues = list()
+import statistics as stats
+for x in film_averages['film_id']:
+    c.execute('SELECT rating FROM review INNER JOIN film USING(film_id) WHERE film_id=?', [x])
+    individ_film_reviews = c.fetchall()
+    temp_ratings_tuple = tuple([x[0] for x in individ_film_reviews])
+    try:
+        SDvalues.append(stats.stdev(temp_ratings_tuple))
+    except:
+        SDvalues.append(None)
+film_averages = film_averages.assign(SD=SDvalues)
+films_filt = film_averages.where(film_averages['count']>5)
+films_filt = films_filt.dropna(0)
+showme = films_filt[['film_title','film_release_date','count', 'SD']]
