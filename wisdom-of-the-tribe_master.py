@@ -906,3 +906,14 @@ film_averages = film_averages.assign(SD=SDvalues)
 films_filt = film_averages.where(film_averages['count']>5)
 films_filt = films_filt.dropna(0)
 showme = films_filt[['film_title','film_release_date','count', 'SD']]
+
+
+###load movielens user reviews
+
+sqlite3.connect(':memory:')
+fd = open('movielens1.sql', 'r')
+script = fd.read()
+c.executescript(script)
+fd.close()
+c.execute('PRAGMA table_info(Movies)');c.fetchall()
+users
