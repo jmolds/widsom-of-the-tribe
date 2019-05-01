@@ -9,6 +9,22 @@ from bs4 import BeautifulSoup
 import time
 from tqdm import tqdm
 import csv
+import sqlite3
+import pandas as pd
+from datetime import datetime
+
+import pandas as pd
+import numpy as np
+import scipy as sp
+import plotly.plotly as py
+import plotly.figure_factory as ff
+import plotly 
+plotly.tools.set_credentials_file(username='jolds', api_key='QmM7nk1rNElpcqKM4o3I')
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+import statistics as stats
+import math as m
 
 ####copy code for imdb
 film_list = list()
@@ -558,6 +574,7 @@ film_averages = pd.read_sql_query("""
 
 SDvalues = list()
 import statistics as stats
+
 for x in film_averages['film_id']:
     c.execute('SELECT rating FROM review INNER JOIN film USING(film_id) WHERE film_id=?', [x])
     individ_film_reviews = c.fetchall()
@@ -648,7 +665,7 @@ df = pd.read_sql_query("""
 ### same for author: review_count, author_rating_avg, author_rating_sd
 ##step 1: get all film_id values to build loop
 df = pd.read_sql_query("""
-    SELECT film_id
+    SELECT *
     FROM film
 """, conn)   
 film_ids = df['film_id']
@@ -789,6 +806,7 @@ plt.ylabel('Frequency')
 #plt.legend()
 plt.show()
 ##correlation spaghetti 
+import statistics as stats
 import math as m
 user=-.6; auth=.5
 (user*auth)/m.sqrt((m.pow(user,2))*(m.pow(auth,2)))
@@ -915,5 +933,188 @@ fd = open('movielens1.sql', 'r')
 script = fd.read()
 c.executescript(script)
 fd.close()
+c.execute('PRAGMA table_info(Ratings)');c.fetchall()
 c.execute('PRAGMA table_info(Movies)');c.fetchall()
-users
+c.execute('PRAGMA table_info(film)');c.fetchall()
+
+##to filter users to only include those with 100+ film ratings that 
+##within the current critics database. 
+
+test = pd.read_sql_query("""
+    SELECT *
+    FROM Movies
+""", conn)
+
+##inner join of user ratings and movies relation
+df = pd.read_sql_query("""
+    SELECT COUNT(*)
+    FROM Ratings R, Movies M,  
+    WHERE R.movie_id = M.id
+    --GROUP BY R.user_id
+""", conn)
+##need to match film titles from film table (critics) 
+##with Movies table (Movielens users)
+
+##Becuase the movielens Movie table includes the '(year)' as part of the title relation
+##this must be removed before matching with the (critic's) film table.
+user_movies = pd.read_sql_query("""
+    SELECT *
+    FROM Movies   
+""", conn)
+
+c.execute('ALTER TABLE Movies ADD title_trunc TEXT')
+
+##save film titles without year or non-english title as title_trunc in Movie table
+user_movies['title_trunc'] = None
+for x in range(len(user_movies)):
+    temp_title = user_movies.at[x, 'title']
+    temp_title = temp_title.partition(' (')[0]
+    user_movies.at[x, 'title_trunc'] = temp_title
+    c.execute('''UPDATE Movies 
+              SET title_trunc = ?
+              WHERE id = ?
+              ''', [temp_title, int(user_movies.at[x, 'id'])]) 
+    
+user_movies2 = pd.read_sql_query("""
+    SELECT *
+    FROM Movies   
+""", conn)    
+critic_films = pd.read_sql_query("""
+    SELECT *
+    FROM film   
+""", conn)    
+len(user_movies2)
+len(critic_films)
+## new inner join of users movie table with critics film table
+df = pd.read_sql_query("""
+    SELECT *
+    FROM Movies INNER JOIN film 
+    ON Movies.title_trunc = film.film_title
+""", conn)
+
+##join with Ratings table to get count of reviews GROUP BY userID
+## film table must only include titles with enough ratings to have an average film rating
+
+users_80reviews = pd.read_sql_query("""
+    SELECT COUNT(*), user_id
+    FROM (Ratings INNER JOIN Movies ON Ratings.movie_id = Movies.id)
+    INNER JOIN (SELECT * FROM film WHERE film_rating_sd > 0) ON title_trunc = film_title
+    GROUP BY user_id
+    HAVING COUNT(*) > 79;
+""", conn)
+
+##206 users with 80+ ratings that match films within the critics reviews db and have
+## enough reviews to calculate mean and sd across critic reviews
+
+### sample one user to being walkthrough example of prediction error
+user0 = users_80reviews.sample(n=1)
+user0_id = int(user0['user_id'])
+###next get all ratings for user0
+user0_reviews = pd.read_sql_query("""
+    SELECT *
+    FROM (Ratings INNER JOIN Movies ON Ratings.movie_id = Movies.id)
+    INNER JOIN (SELECT * FROM film WHERE film_rating_sd > 0) ON title_trunc = film_title
+    WHERE Ratings.user_id = ?
+""", conn, params = [user0_id])
+
+### sample 80 reviews for the user
+user0_80reviews = user0_reviews.sample(n=80)
+### add fold column
+user0_80reviews['fold'] = None 
+user0_80reviews.reset_index(inplace=True)
+user0_80reviews.iloc[0:20,16] = 1
+user0_80reviews.iloc[20:40,16] = 2
+user0_80reviews.iloc[40:60, 16] = 3
+user0_80reviews.iloc[60:80, 16] = 4
+folds = [1,2,3,4]
+
+## build a 4 dim array to save the results of the model predictions 
+## indexing the array: [stack, sheet, rows, columns]
+##               Measurement, fold, 60 test rows, 20 different model fits (1-20 user ratings entered)
+## 4 different measuremnts (residual error, rating prediction, actual rating, # tribe members for rating)
+results = np.zeros([4,4,60,20])
+
+## preference update function
+##overall film ratings used to compute user z-scores
+overall_film_mean = stats.mean(film_averages["RatingAVG"])
+overall_film_sd = stats.stdev(film_averages["RatingAVG"])
+
+def pref_update(film_, rating_):
+    ex_df = pd.read_sql_query(
+        """
+    SELECT *
+    FROM review INNER JOIN film USING(film_id) INNER JOIN author USING(author_id)
+    WHERE film_title=? AND review_count > 1
+    ORDER BY rating DESC
+    """,
+        conn,
+        params=[film_],
+    )
+    # print('Updating preferences based on {0} Rating = {1}').format(film_,rating_)
+    # loop across all author ratings (x) for film
+    for x in range(len(ex_df)):
+        user_z = (rating_ - overall_film_mean) / overall_film_sd
+        by_film_points = (
+            user_z
+            * (ex_df["rating"][x] - ex_df["film_rating_avg"][x])
+            / ex_df["film_rating_sd"][x]
+        )
+        by_author_points = (
+            user_z
+            * (ex_df["rating"][x] - ex_df["author_rating_avg"][x])
+            / ex_df["author_rating_sd"][x]
+        )
+        temp_score = (by_film_points + by_author_points) / 2
+        ### get total_score from SELECT by author and update + temp_score
+        if ex_df["total_score"][x] is not None:
+            ex_df.loc[x, "total_score"] = ex_df.loc[x, "total_score"] + temp_score
+        else:
+            ex_df.loc[x, "total_score"] = temp_score
+        if ex_df["score_count"][x] is not None:
+            ex_df.loc[x, "score_count"] = ex_df.loc[x, "score_count"] + 1
+        else:
+            ex_df.loc[x, "score_count"] = int(1)
+        ex_df.loc[x, "pref_aff"] = (
+            ex_df.loc[x, "total_score"] / ex_df.loc[x, "score_count"]
+        )
+        update_total_score = ex_df.at[x, "total_score"]
+        update_score_count = ex_df.at[x, "score_count"]
+        update_pref_aff = ex_df.at[x, "pref_aff"]
+        update_author_id = int(ex_df.at[x, "author_id"])
+        c.execute(
+            """UPDATE author 
+                  SET total_score = ?, score_count = ?, pref_aff = ? 
+                  WHERE author_id =?""",
+            [update_total_score, update_score_count, update_pref_aff, update_author_id],
+        )
+
+
+###NOTE: when looped across folds the db will need to be reset
+c.execute('UPDATE author SET total_score = NULL, score_count = 0, pref_aff = NULL')
+##pref update for 
+for k in folds: ##folds (1,2,3,4)
+    
+for x in range(0,20):
+    if k = 1: train = x
+    if k = 2: train = x + 20
+    if k = 3: train = x + 40
+    if k = 4: train = x + 60
+    pref_update(user0_80reviews.loc[train, 'film_title'], (user0_80reviews.loc[train, 'rating']*20))
+    ## get 60 predictions and save into results array
+    test_film_ids = user0_80reviews[user0_80reviews['fold']!=k]['film_id']
+    for i in range(0,60):
+    update_df = pd.read_sql_query(
+    """
+                SELECT *, AVG(score_count) AS pref_count_avg
+                FROM review INNER JOIN author USING(author_id) INNER JOIN film USING(film_id)
+                WHERE pref_aff > 0 AND film_id = ? 
+                GROUP BY film_id""",
+    conn, params = test_film_ids[i],
+)
+
+seq = range(25,41)
+sum(seq)/len(seq)
+tot = 64+69+73+74
+tot/4    
+80*.025
+
